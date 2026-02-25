@@ -121,16 +121,6 @@
 
     function loadFallbackUsers() {
         if (preload.length > 0) return;
-        const FALLBACK = `email,pass,name,fname,pno,city,expiry,phone,greek,region,am,year,apofasi
-asf5@boxfi.uk,muneeb6484,SHAHZAD KHAWAR,NASRULLAH KHAN,NQ5161241,SHEIKHUPURA,26MAR2035,03009199355,DAMIANAKIS KONSTANTINOS,ΧΑΝΙΑ,123456,2025,12345
-asf6@boxfi.uk,muneeb6484,MUHAMMAD AYAZ,NASRULLAH KHAN,CR0164282,SHEIKHUPURA,09DEC2026,03009199355,KABITAKIS ANDONIS,ΗΡΑΚΛΕΙΟ,234567,2025,23456
-asf8@boxfi.uk,muneeb6484,AHMAD AMMAR,HAFIZ QAISER SOHAIL,XV1172691,GUJRANWALA,20MAR2028,03009199355,PATERAKIS NIKITAS,ΡΕΘΥΜΝΟ,345678,2025,34567
-asf9@boxfi.uk,muneeb6484,ABBAS HAIDER,ISHFAQ HUSSAIN,TY1015531,GUJRAT,11JUN2033,03009199355,PATERAKIS NIKITAS,ΧΑΝΙΑ,456789,2025,45678
-asf10@boxfi.uk,muneeb6484,MUHAMMAD AWAIS,MUHAMMAD KHADIM,BX1690651,GUJRAT,13JAN2027,03009199355,KOUROUTHIANAKIS MICHAEL,ΑΘΗΝΑ,567890,2025,56789
-asf12@boxfi.uk,muneeb6484,HAMZA ABBAS,MUHAMMAD ASIF,HV1010613,GUJRAT,29APR2030,03009199355,DASKALAKI EVANGELIA,ΘΕΣΣΑΛΟΝΙΚΗ,678901,2025,67890
-asf13@boxfi.uk,muneeb6484,RASHED ALI,DITTA ALLAH,SN1830371,SHEIKHUPURA,30JAN2034,03009199355,DASKALAKI EVANGELIA,ΠΑΤΡΑ,789012,2025,78901
-asf14@boxfi.uk,muneeb6484,SYED GHAYOUR ABBAS BUKHARI,SYED IFTIKHAR HUSSAIN,HU3341691,MANDI BAHAUDDIN,23OCT2028,03009199355,KABITAKIS ANDONIS,ΛΑΡΙΣΑ,890123,2025,89012
-asf15@boxfi.uk,muneeb6484,MUHAMMAD USMAN,MIRAJ DIN,AS2857533,SHEIKHUPURA,14JUN2032,03009199355,LENIDAKIS THOMAS,ΒΟΛΟΣ,901234,2025,90123`;
         preload = parseCSV('');
         console.log(`📄 Loaded ${preload.length} users (built-in fallback)`);
         rebuildPanel();
@@ -415,7 +405,33 @@ asf15@boxfi.uk,muneeb6484,MUHAMMAD USMAN,MIRAJ DIN,AS2857533,SHEIKHUPURA,14JUN20
         URL.revokeObjectURL(url);
         console.log('📁 JSON downloaded:', a.download);
     }
+    function downloadTMStorage() {
+        const data = GM_getValue("gondal_accounts_v4");
 
+        if (!data) {
+            console.log("❌ Key not found in Tampermonkey storage");
+            return;
+        }
+
+        const blob = new Blob(
+            [JSON.stringify(data, null, 2)],
+            { type: "application/json" }
+        );
+
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+
+        a.href = url;
+        a.download = `tm-storage-${Date.now()}.json`;
+
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+
+        URL.revokeObjectURL(url);
+
+        console.log("📁 Tampermonkey JSON downloaded");
+    }
     /* ================= CUSTOM TOAST NOTIFICATION ================= */
     let toastContainer = null;
 
@@ -1355,7 +1371,7 @@ asf15@boxfi.uk,muneeb6484,MUHAMMAD USMAN,MIRAJ DIN,AS2857533,SHEIKHUPURA,14JUN20
 
         // Download full localStorage as JSON
         panel.querySelector('#downloadJsonBtn').addEventListener('click', () => {
-            downloadLocalStorageJSON();
+            downloadTMStorage();
         });
 
         // Individual book buttons - auto pick next available slot
