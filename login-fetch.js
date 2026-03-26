@@ -743,6 +743,7 @@
             // Schedule closed detected at login
             if (loginResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED at login! Stopping all bookings.');
+                if (loginResult.html) showResponseCard(user.email, loginResult.html, false);
                 showToast('closed', user, slotTime);
                 const rec = buildRecord(user, slotIndex, slot, 'CLOSED', false);
                 saveBookingResult(rec);
@@ -781,6 +782,7 @@
             // Schedule closed - stop everything
             if (bookResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED! Stopping all bookings.');
+                if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
                 showToast('closed', user, slotTime);
                 const rec = buildRecord(user, slotIndex, slot, 'CLOSED', false);
                 saveBookingResult(rec);
@@ -825,6 +827,7 @@
             // Check closed again after retries
             if (bookResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED during retry! Stopping all bookings.');
+                if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
                 showToast('closed', user, `${slots[slotIndex][0].trim()} - ${slots[slotIndex][1].trim()}`);
                 const rec = buildRecord(user, slotIndex, slots[slotIndex], 'CLOSED', false);
                 saveBookingResult(rec);
@@ -871,6 +874,9 @@
                 if (card) card.className = 'user-card failed';
                 if (statusEl) statusEl.textContent = `❌ Failed: ${finalSlotTime}`;
             }
+
+            const finalHtml = (passportResult.success && passportResult.html) ? passportResult.html : (bookResult.html || '');
+            if (finalHtml) showResponseCard(user.email, finalHtml, bookResult.success);
 
             const rec = buildRecord(user, slotIndex, finalSlot, bookResult.success ? 'BOOKED' : 'FAILED', passportResult.success);
             saveBookingResult(rec);
@@ -932,6 +938,7 @@
         
         const loginResult = await doLogin(user);
         if (loginResult.closed) {
+            if (loginResult.html) showResponseCard(user.email, loginResult.html, false);
             showToast('closed', user, '');
             const rec = buildRecord(user, slotIdx, slots[slotIdx], 'CLOSED', false);
             saveBookingResult(rec);
@@ -948,6 +955,7 @@
 
         // Schedule closed - no appointments
         if (bookResult.closed) {
+            if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
             const slotRef = slots[finalSlotIdx];
             const slotTimeRef = slotRef ? `${slotRef[0].trim()} - ${slotRef[1].trim()}` : '';
             showToast('closed', user, slotTimeRef);
@@ -978,6 +986,7 @@
 
         // Closed during retries
         if (bookResult.closed) {
+            if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
             const slotRef = slots[finalSlotIdx];
             const slotTimeRef = slotRef ? `${slotRef[0].trim()} - ${slotRef[1].trim()}` : '';
             showToast('closed', user, slotTimeRef);
@@ -1010,6 +1019,9 @@
         const rec = buildRecord(user, finalSlotIdx, finalSlot, bookResult.success ? 'BOOKED' : 'FAILED', passportResult.success);
         saveBookingResult(rec);
         showToast(bookResult.success ? 'success' : 'fail', user, finalSlotTime);
+
+        const finalHtml = (passportResult.success && passportResult.html) ? passportResult.html : (bookResult.html || '');
+        if (finalHtml) showResponseCard(user.email, finalHtml, bookResult.success);
         
         return { 
             success: bookResult.success, 
@@ -1199,8 +1211,145 @@
                 flex: 1;
                 margin-bottom: 0;
             }
+            .gujjar-response-card {
+                position: fixed;
+                width: 420px;
+                max-height: 80vh;
+                background: #fff;
+                border: 2px solid #888;
+                border-radius: 8px;
+                font-family: system-ui, -apple-system, sans-serif;
+                font-size: 12px;
+                z-index: 1000000;
+                box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+                display: flex;
+                flex-direction: column;
+            }
+            .gujjar-response-card.rc-success { border-color: #4caf50; }
+            .gujjar-response-card.rc-fail { border-color: #e53935; }
+            .gujjar-rc-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 8px 12px;
+                cursor: move;
+                border-radius: 6px 6px 0 0;
+                user-select: none;
+                gap: 8px;
+            }
+            .rc-success .gujjar-rc-header { background: #4caf50; color: #fff; }
+            .rc-fail .gujjar-rc-header { background: #e53935; color: #fff; }
+            .gujjar-rc-title {
+                font-weight: bold;
+                font-size: 12px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                flex: 1;
+            }
+            .gujjar-rc-btns {
+                display: flex;
+                gap: 4px;
+                flex-shrink: 0;
+            }
+            .gujjar-rc-btn {
+                background: rgba(255,255,255,0.3);
+                border: none;
+                color: #fff;
+                width: 22px;
+                height: 22px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 14px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                line-height: 1;
+            }
+            .gujjar-rc-btn:hover { background: rgba(255,255,255,0.5); }
+            .gujjar-rc-body {
+                padding: 10px;
+                overflow-y: auto;
+                flex: 1;
+                max-height: 60vh;
+                background: #fafafa;
+                border-radius: 0 0 6px 6px;
+            }
+            .gujjar-rc-body iframe {
+                width: 100%;
+                height: 50vh;
+                border: none;
+                border-radius: 4px;
+                background: #fff;
+            }
+            .gujjar-response-card.rc-minimized .gujjar-rc-body { display: none; }
+            .gujjar-response-card.rc-minimized { max-height: none; }
         `;
         document.head.appendChild(style);
+    }
+
+    let responseCardCount = 0;
+
+    function showResponseCard(email, htmlContent, isSuccess) {
+        responseCardCount++;
+        const cardId = 'gujjar-rc-' + responseCardCount;
+        const offsetX = 30 * (responseCardCount % 8);
+        const offsetY = 30 * (responseCardCount % 8);
+
+        const card = document.createElement('div');
+        card.id = cardId;
+        card.className = 'gujjar-response-card ' + (isSuccess ? 'rc-success' : 'rc-fail');
+        card.style.top = (60 + offsetY) + 'px';
+        card.style.left = (60 + offsetX) + 'px';
+
+        const statusIcon = isSuccess ? '\u2705' : '\u274C';
+
+        card.innerHTML = `
+            <div class="gujjar-rc-header">
+                <span class="gujjar-rc-title">${statusIcon} ${email}</span>
+                <div class="gujjar-rc-btns">
+                    <button class="gujjar-rc-btn rc-min-btn" title="Minimize">\u2014</button>
+                    <button class="gujjar-rc-btn rc-close-btn" title="Close">\u2716</button>
+                </div>
+            </div>
+            <div class="gujjar-rc-body">
+                <iframe sandbox="allow-same-origin"></iframe>
+            </div>
+        `;
+
+        document.body.appendChild(card);
+
+        const iframe = card.querySelector('iframe');
+        iframe.srcdoc = htmlContent;
+
+        card.querySelector('.rc-min-btn').addEventListener('click', () => {
+            card.classList.toggle('rc-minimized');
+            card.querySelector('.rc-min-btn').textContent = card.classList.contains('rc-minimized') ? '\u25A1' : '\u2014';
+        });
+
+        card.querySelector('.rc-close-btn').addEventListener('click', () => {
+            card.remove();
+        });
+
+        const header = card.querySelector('.gujjar-rc-header');
+        let isDrag = false, dragX, dragY, startL, startT;
+        header.addEventListener('mousedown', e => {
+            if (e.target.closest('.gujjar-rc-btn')) return;
+            isDrag = true;
+            dragX = e.clientX;
+            dragY = e.clientY;
+            const rect = card.getBoundingClientRect();
+            startL = rect.left;
+            startT = rect.top;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!isDrag) return;
+            card.style.left = (startL + e.clientX - dragX) + 'px';
+            card.style.top = (startT + e.clientY - dragY) + 'px';
+            card.style.right = 'auto';
+        });
+        document.addEventListener('mouseup', () => { isDrag = false; });
     }
 
     function rebuildPanel() {
