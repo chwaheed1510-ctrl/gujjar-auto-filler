@@ -524,6 +524,7 @@
 
     /* ================= LOGIN FUNCTION ================= */
     async function doLogin(user) {
+        const payload = { name: user.email, password: user.pass };
         const formData = new URLSearchParams();
         formData.append('name', user.email);
         formData.append('password', user.pass);
@@ -540,30 +541,36 @@
             const html = await response.text();
             const htmlLower = html.toLowerCase();
             const closed = htmlLower.includes('is closed') || htmlLower.includes('no available appointments') || htmlLower.includes('کوئی دستیاب اپوائنٹمنٹس');
-            const success = !closed && response.ok && (html.includes('logout') || html.includes('Logout') || !html.includes('Log in'));
-            
+            const loggedIn = response.ok && (html.includes('logout') || html.includes('Logout') || html.includes('Sign out') || !html.includes('Log in'));
+            const success = !closed && loggedIn;
+            console.log("HTML::-------------", html)
             if (closed) {
                 console.log('🚫 LOGIN: Schedule is CLOSED - No appointments available');
             } else {
                 console.log(success ? '✅ Login OK' : '❌ Login FAIL', '- Status:', response.status);
             }
+            addResponseSection(user.email, closed ? 'LOGIN (Closed)' : 'LOGIN', loginUrl, payload, html, loggedIn);
             return { success, status: response.status, html, closed };
             
         } catch (error) {
             console.error('❌ LOGIN ERROR:', error);
+            addResponseSection(user.email, 'LOGIN', loginUrl, payload, error.message, false);
             return { success: false, error: error.message, closed: false };
         }
     }
 
     /* ================= BOOK APPOINTMENT FUNCTION ================= */
     async function bookAppointment(user, startTime, finishTime) {
+        const payload = {
+            'reservation[start_time]': startTime,
+            'reservation[finish_time]': finishTime,
+            'reservation[full_name]': user.name,
+            'reservation[phone]': user.phone,
+            'reservation[mobile]': user.phone,
+            'reservation[resource_id]': resource_id
+        };
         const formData = new URLSearchParams();
-        formData.append('reservation[start_time]', startTime);
-        formData.append('reservation[finish_time]', finishTime);
-        formData.append('reservation[full_name]', user.name);
-        formData.append('reservation[phone]', user.phone);
-        formData.append('reservation[mobile]', user.phone);
-        formData.append('reservation[resource_id]', resource_id);
+        Object.entries(payload).forEach(([k, v]) => formData.append(k, v));
         formData.append('reservation[xpos]', '');
         formData.append('reservation[ypos]', '');
 
@@ -588,11 +595,12 @@
             } else {
                 console.log(success ? '✅ Booked' : (alreadyBooked ? '⚠️ Already Booked' : '❌ Failed'), '- Status:', response.status);
             }
-            
+            addResponseSection(user.email, 'BOOK', appointmentUrl, payload, html, success);
             return { success, status: response.status, html, user: user.name, alreadyBooked, closed };
             
         } catch (error) {
             console.error('❌ BOOK ERROR:', error);
+            addResponseSection(user.email, 'BOOK', appointmentUrl, payload, error.message, false);
             return { success: false, error: error.message, user: user.name, alreadyBooked: false, closed: false };
         }
     }
@@ -604,22 +612,23 @@
         
         const formUrl = getPassportFormUrl(datePart, hour, min);
         
+        const payload = {
+            'form[3]': user.region || '',
+            'form[4]': user.am || '',
+            'form[6]': user.year || '2025',
+            'form[7]': user.apofasi || '',
+            'form[5]': (user.greek || '').toUpperCase(),
+            'form[1]': (user.pno || '').toUpperCase(),
+            'form[19][]': 'I DECLARE THAT ALL ABOVE INFORMATION IS ACCURATE.',
+            'reservation[start_time]': startTime,
+            'reservation[finish_time]': finishTime,
+            'reservation[full_name]': user.name,
+            'reservation[phone]': user.phone,
+            'reservation[mobile]': user.phone,
+            'reservation[resource_id]': resource_id
+        };
         const formData = new URLSearchParams();
-        
-        formData.append('form[3]', user.region || '');
-        formData.append('form[4]', user.am || '');
-        formData.append('form[6]', user.year || '2025');
-        formData.append('form[7]', user.apofasi || '');
-        formData.append('form[5]', (user.greek || '').toUpperCase());
-        formData.append('form[1]', (user.pno || '').toUpperCase());
-        formData.append('form[19][]', 'I DECLARE THAT ALL ABOVE INFORMATION IS ACCURATE.');
-        
-        formData.append('reservation[start_time]', startTime);
-        formData.append('reservation[finish_time]', finishTime);
-        formData.append('reservation[full_name]', user.name);
-        formData.append('reservation[phone]', user.phone);
-        formData.append('reservation[mobile]', user.phone);
-        formData.append('reservation[resource_id]', resource_id);
+        Object.entries(payload).forEach(([k, v]) => formData.append(k, v));
         formData.append('reservation[xpos]', '');
         formData.append('reservation[ypos]', '');
 
@@ -637,17 +646,18 @@
             const success = response.ok && !html.toLowerCase().includes('error');
             
             console.log(success ? '✅ Form Submitted' : '❌ Form Failed', '- Status:', response.status);
-            
+            addResponseSection(user.email, 'PASSPORT', formUrl, payload, html, success);
             return { success, status: response.status, html, user: user.name };
             
         } catch (error) {
             console.error('❌ PASSPORT FORM ERROR:', error);
+            addResponseSection(user.email, 'PASSPORT', formUrl, payload, error.message, false);
             return { success: false, error: error.message, user: user.name };
         }
     }
 
     /* ================= LOGOUT FUNCTION ================= */
-    async function doLogout() {
+    async function doLogout(email) {
         console.log('🚪 LOGOUT...');
 
         try {
@@ -657,10 +667,12 @@
             });
 
             console.log('🚪 Logout OK - Status:', response.status);
+            if (email) addResponseSection(email, 'LOGOUT', logoutUrl, { method: 'GET' }, '<p>Logout ' + (response.ok ? 'OK' : 'Failed') + ' - Status: ' + response.status + '</p>', response.ok);
             return { success: response.ok, status: response.status };
             
         } catch (error) {
             console.error('❌ LOGOUT ERROR:', error);
+            if (email) addResponseSection(email, 'LOGOUT', logoutUrl, { method: 'GET' }, error.message, false);
             return { success: false, error: error.message };
         }
     }
@@ -721,7 +733,6 @@
                 console.log('❌ No more slots available!');
                 const rec = buildRecord(user, null, null, 'NO_SLOT', false);
                 saveBookingResult(rec);
-                showToast('fail', user, 'No slot available');
                 results.push({ user: user.name, email: user.email, login: false, book: false, logout: false, slot: null });
                 continue;
             }
@@ -743,8 +754,6 @@
             // Schedule closed detected at login
             if (loginResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED at login! Stopping all bookings.');
-                if (loginResult.html) showResponseCard(user.email, loginResult.html, false);
-                showToast('closed', user, slotTime);
                 const rec = buildRecord(user, slotIndex, slot, 'CLOSED', false);
                 saveBookingResult(rec);
                 if (card) card.className = 'user-card failed';
@@ -767,7 +776,6 @@
                 console.log('⏭️ Skipping - login failed');
                 const rec = buildRecord(user, slotIndex, slot, 'LOGIN_FAILED', false);
                 saveBookingResult(rec);
-                showToast('fail', user, slotTime);
                 if (card) card.className = 'user-card failed';
                 if (statusEl) statusEl.textContent = 'Login failed';
                 results.push({ user: user.name, email: user.email, login: false, book: false, logout: false, slot: slot });
@@ -782,13 +790,11 @@
             // Schedule closed - stop everything
             if (bookResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED! Stopping all bookings.');
-                if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
-                showToast('closed', user, slotTime);
                 const rec = buildRecord(user, slotIndex, slot, 'CLOSED', false);
                 saveBookingResult(rec);
                 if (card) card.className = 'user-card failed';
                 if (statusEl) statusEl.textContent = '🚫 Schedule Closed - No Appointments Available';
-                await doLogout();
+                await doLogout(user.email);
                 results.push({ user: user.name, email: user.email, login: true, book: false, logout: true, slot: slot, closed: true });
                 // Mark remaining users
                 for (let j = i + 1; j < preload.length; j++) {
@@ -827,13 +833,11 @@
             // Check closed again after retries
             if (bookResult.closed) {
                 console.log('🚫 SCHEDULE CLOSED during retry! Stopping all bookings.');
-                if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
-                showToast('closed', user, `${slots[slotIndex][0].trim()} - ${slots[slotIndex][1].trim()}`);
                 const rec = buildRecord(user, slotIndex, slots[slotIndex], 'CLOSED', false);
                 saveBookingResult(rec);
                 if (card) card.className = 'user-card failed';
                 if (statusEl) statusEl.textContent = '🚫 Schedule Closed - No Appointments Available';
-                await doLogout();
+                await doLogout(user.email);
                 results.push({ user: user.name, email: user.email, login: true, book: false, logout: true, slot: slots[slotIndex], closed: true });
                 for (let j = i + 1; j < preload.length; j++) {
                     const ru = preload[j];
@@ -861,22 +865,17 @@
                 await randomDelay(1000, 2000);
             }
             
-            const logoutResult = await doLogout();
+            const logoutResult = await doLogout(user.email);
 
             if (bookResult.success) {
                 markSlot(slotIndex, 'booked', user.email);
-                showToast('success', user, finalSlotTime);
                 if (card) card.className = 'user-card success';
                 if (statusEl) statusEl.textContent = `✅ Booked: ${finalSlotTime}`;
             } else {
                 markSlot(slotIndex, 'failed', user.email);
-                showToast('fail', user, finalSlotTime);
                 if (card) card.className = 'user-card failed';
                 if (statusEl) statusEl.textContent = `❌ Failed: ${finalSlotTime}`;
             }
-
-            const finalHtml = (passportResult.success && passportResult.html) ? passportResult.html : (bookResult.html || '');
-            if (finalHtml) showResponseCard(user.email, finalHtml, bookResult.success);
 
             const rec = buildRecord(user, slotIndex, finalSlot, bookResult.success ? 'BOOKED' : 'FAILED', passportResult.success);
             saveBookingResult(rec);
@@ -937,14 +936,12 @@
         console.log(`\n🚀 Processing: ${user.name} (${user.email})`);
         
         const loginResult = await doLogin(user);
-        if (loginResult.closed) {
-            if (loginResult.html) showResponseCard(user.email, loginResult.html, false);
-            showToast('closed', user, '');
-            const rec = buildRecord(user, slotIdx, slots[slotIdx], 'CLOSED', false);
-            saveBookingResult(rec);
-            return { success: false, step: 'closed', closed: true, finalSlotIdx: slotIdx };
-        }
-        if (!loginResult.success) return { success: false, step: 'login' };
+        // if (loginResult.closed) {
+        //     const rec = buildRecord(user, slotIdx, slots[slotIdx], 'CLOSED', false);
+        //     saveBookingResult(rec);
+        //     return { success: false, step: 'closed', closed: true, finalSlotIdx: slotIdx };
+        // }
+        // if (!loginResult.success) return { success: false, step: 'login' };
         
         await new Promise(r => setTimeout(r, 100));
         
@@ -955,13 +952,10 @@
 
         // Schedule closed - no appointments
         if (bookResult.closed) {
-            if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
             const slotRef = slots[finalSlotIdx];
-            const slotTimeRef = slotRef ? `${slotRef[0].trim()} - ${slotRef[1].trim()}` : '';
-            showToast('closed', user, slotTimeRef);
             const rec = buildRecord(user, finalSlotIdx, slotRef, 'CLOSED', false);
             saveBookingResult(rec);
-            await doLogout();
+            await doLogout(user.email);
             return { success: false, step: 'closed', closed: true, finalSlotIdx };
         }
 
@@ -986,13 +980,10 @@
 
         // Closed during retries
         if (bookResult.closed) {
-            if (bookResult.html) showResponseCard(user.email, bookResult.html, false);
             const slotRef = slots[finalSlotIdx];
-            const slotTimeRef = slotRef ? `${slotRef[0].trim()} - ${slotRef[1].trim()}` : '';
-            showToast('closed', user, slotTimeRef);
             const rec = buildRecord(user, finalSlotIdx, slotRef, 'CLOSED', false);
             saveBookingResult(rec);
-            await doLogout();
+            await doLogout(user.email);
             return { success: false, step: 'closed', closed: true, finalSlotIdx };
         }
         
@@ -1005,7 +996,7 @@
         
         await new Promise(r => setTimeout(r, 100));
         
-        const logoutResult = await doLogout();
+        const logoutResult = await doLogout(user.email);
 
         const finalSlot = slots[finalSlotIdx];
         const finalSlotTime = finalSlot ? `${finalSlot[0].trim()} - ${finalSlot[1].trim()}` : '';
@@ -1018,11 +1009,6 @@
 
         const rec = buildRecord(user, finalSlotIdx, finalSlot, bookResult.success ? 'BOOKED' : 'FAILED', passportResult.success);
         saveBookingResult(rec);
-        showToast(bookResult.success ? 'success' : 'fail', user, finalSlotTime);
-
-        const finalHtml = (passportResult.success && passportResult.html) ? passportResult.html : (bookResult.html || '');
-        if (finalHtml) showResponseCard(user.email, finalHtml, bookResult.success);
-        
         return { 
             success: bookResult.success, 
             login: loginResult, 
@@ -1213,8 +1199,8 @@
             }
             .gujjar-response-card {
                 position: fixed;
-                width: 420px;
-                max-height: 80vh;
+                width: 480px;
+                max-height: 85vh;
                 background: #fff;
                 border: 2px solid #888;
                 border-radius: 8px;
@@ -1268,59 +1254,105 @@
             }
             .gujjar-rc-btn:hover { background: rgba(255,255,255,0.5); }
             .gujjar-rc-body {
-                padding: 10px;
+                padding: 0;
                 overflow-y: auto;
                 flex: 1;
-                max-height: 60vh;
+                max-height: 70vh;
                 background: #fafafa;
                 border-radius: 0 0 6px 6px;
             }
-            .gujjar-rc-body iframe {
+            .gujjar-response-card.rc-minimized .gujjar-rc-body { display: none; }
+            .gujjar-response-card.rc-minimized { max-height: none; }
+            .gujjar-rc-section {
+                border-bottom: 2px solid #ddd;
+            }
+            .gujjar-rc-section:last-child { border-bottom: none; }
+            .gujjar-rc-section-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                padding: 6px 10px;
+                background: #eee;
+                cursor: pointer;
+                font-weight: bold;
+                font-size: 11px;
+                color: #333;
+                user-select: none;
+            }
+            .gujjar-rc-section-header:hover { background: #e0e0e0; }
+            .gujjar-rc-section-header .rc-s-icon { font-size: 10px; color: #888; }
+            .gujjar-rc-section.rc-s-ok .gujjar-rc-section-header { background: #e8f5e9; color: #2e7d32; }
+            .gujjar-rc-section.rc-s-fail .gujjar-rc-section-header { background: #ffebee; color: #c62828; }
+            .gujjar-rc-section-content { display: none; padding: 8px 10px; }
+            .gujjar-rc-section.rc-s-open .gujjar-rc-section-content { display: block; }
+            .gujjar-rc-payload {
+                background: #1e1e1e;
+                color: #d4d4d4;
+                padding: 8px;
+                border-radius: 4px;
+                font-family: 'Consolas', 'Monaco', monospace;
+                font-size: 10px;
+                white-space: pre-wrap;
+                word-break: break-all;
+                max-height: 120px;
+                overflow-y: auto;
+                margin-bottom: 6px;
+            }
+            .gujjar-rc-response-frame {
                 width: 100%;
-                height: 50vh;
-                border: none;
+                height: 200px;
+                border: 1px solid #ccc;
                 border-radius: 4px;
                 background: #fff;
             }
-            .gujjar-response-card.rc-minimized .gujjar-rc-body { display: none; }
-            .gujjar-response-card.rc-minimized { max-height: none; }
+            .gujjar-rc-dl-btn {
+                display: block;
+                width: calc(100% - 20px);
+                margin: 8px 10px;
+                padding: 7px;
+                background: #0969da;
+                color: #fff;
+                border: none;
+                border-radius: 4px;
+                font-size: 11px;
+                font-weight: bold;
+                cursor: pointer;
+                text-align: center;
+            }
+            .gujjar-rc-dl-btn:hover { background: #0757b5; }
         `;
         document.head.appendChild(style);
     }
 
     let responseCardCount = 0;
+    const responseCardsMap = {};
+    const allResponseLogs = [];
 
-    function showResponseCard(email, htmlContent, isSuccess) {
+    function getOrCreateResponseCard(email) {
+        if (responseCardsMap[email]) return responseCardsMap[email];
+
         responseCardCount++;
-        const cardId = 'gujjar-rc-' + responseCardCount;
         const offsetX = 30 * (responseCardCount % 8);
         const offsetY = 30 * (responseCardCount % 8);
 
         const card = document.createElement('div');
-        card.id = cardId;
-        card.className = 'gujjar-response-card ' + (isSuccess ? 'rc-success' : 'rc-fail');
+        card.className = 'gujjar-response-card rc-fail';
         card.style.top = (60 + offsetY) + 'px';
         card.style.left = (60 + offsetX) + 'px';
 
-        const statusIcon = isSuccess ? '\u2705' : '\u274C';
-
         card.innerHTML = `
             <div class="gujjar-rc-header">
-                <span class="gujjar-rc-title">${statusIcon} ${email}</span>
+                <span class="gujjar-rc-title">${email}</span>
                 <div class="gujjar-rc-btns">
+                    <button class="gujjar-rc-btn rc-dl-csv" title="Download CSV">\u2B07</button>
                     <button class="gujjar-rc-btn rc-min-btn" title="Minimize">\u2014</button>
                     <button class="gujjar-rc-btn rc-close-btn" title="Close">\u2716</button>
                 </div>
             </div>
-            <div class="gujjar-rc-body">
-                <iframe sandbox="allow-same-origin"></iframe>
-            </div>
+            <div class="gujjar-rc-body"></div>
         `;
 
         document.body.appendChild(card);
-
-        const iframe = card.querySelector('iframe');
-        iframe.srcdoc = htmlContent;
 
         card.querySelector('.rc-min-btn').addEventListener('click', () => {
             card.classList.toggle('rc-minimized');
@@ -1329,6 +1361,11 @@
 
         card.querySelector('.rc-close-btn').addEventListener('click', () => {
             card.remove();
+            delete responseCardsMap[email];
+        });
+
+        card.querySelector('.rc-dl-csv').addEventListener('click', () => {
+            downloadResponseCSV(email);
         });
 
         const header = card.querySelector('.gujjar-rc-header');
@@ -1350,6 +1387,81 @@
             card.style.right = 'auto';
         });
         document.addEventListener('mouseup', () => { isDrag = false; });
+
+        responseCardsMap[email] = card;
+        return card;
+    }
+
+    function addResponseSection(email, callName, url, payload, responseHtml, isOk) {
+        const card = getOrCreateResponseCard(email);
+        const body = card.querySelector('.gujjar-rc-body');
+
+        card.className = 'gujjar-response-card ' + (isOk ? 'rc-success' : 'rc-fail');
+
+        const section = document.createElement('div');
+        section.className = 'gujjar-rc-section ' + (isOk ? 'rc-s-ok' : 'rc-s-fail');
+
+        const icon = isOk ? '\u2705' : '\u274C';
+        const time = new Date().toLocaleTimeString();
+
+        section.innerHTML = `
+            <div class="gujjar-rc-section-header">
+                <span>${icon} ${callName} <span style="font-weight:normal;color:#888;">[${time}]</span></span>
+                <span class="rc-s-icon">\u25BC</span>
+            </div>
+            <div class="gujjar-rc-section-content">
+                <div style="font-size:10px;color:#666;margin-bottom:4px;"><b>URL:</b> ${url}</div>
+                <div style="font-size:10px;color:#888;margin-bottom:2px;"><b>Payload:</b></div>
+                <div class="gujjar-rc-payload">${escapeHtml(JSON.stringify(payload, null, 2))}</div>
+                <div style="font-size:10px;color:#888;margin-bottom:2px;"><b>Response:</b></div>
+                <iframe class="gujjar-rc-response-frame" sandbox="allow-same-origin"></iframe>
+            </div>
+        `;
+
+        body.appendChild(section);
+
+        const iframe = section.querySelector('iframe');
+        iframe.srcdoc = responseHtml || '<p style="padding:10px;color:#999;">No HTML response</p>';
+
+        section.querySelector('.gujjar-rc-section-header').addEventListener('click', () => {
+            section.classList.toggle('rc-s-open');
+            section.querySelector('.rc-s-icon').textContent = section.classList.contains('rc-s-open') ? '\u25B2' : '\u25BC';
+        });
+
+        allResponseLogs.push({
+            email,
+            callName,
+            url,
+            payload: JSON.stringify(payload),
+            status: isOk ? 'OK' : 'FAIL',
+            time,
+            responseSnippet: (responseHtml || '').substring(0, 500)
+        });
+
+        body.scrollTop = body.scrollHeight;
+    }
+
+    function escapeHtml(str) {
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function downloadResponseCSV(emailFilter) {
+        const data = emailFilter ? allResponseLogs.filter(r => r.email === emailFilter) : allResponseLogs;
+        if (!data.length) { console.log('No response data to download'); return; }
+        const headers = ['email', 'callName', 'url', 'payload', 'status', 'time', 'responseSnippet'];
+        const csvRows = [headers.join(',')];
+        data.forEach(row => {
+            csvRows.push(headers.map(h => '"' + (row[h] || '').replace(/"/g, '""') + '"').join(','));
+        });
+        const blob = new Blob([csvRows.join('\n')], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `responses-${emailFilter || 'all'}-${getCurrentDate()}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     function rebuildPanel() {
@@ -1612,6 +1724,7 @@
         showPanel: createPanel,
         rebuildPanel: rebuildPanel,
         downloadCSV: (type) => { const r = type === 'session' ? sessionResults : getAllBookingResults(); if(r.length) downloadCSV(r, type || 'all'); else console.log('No results'); },
+        downloadResponseCSV: (email) => downloadResponseCSV(email),
         downloadJSON: downloadLocalStorageJSON,
         getResults: getAllBookingResults,
         startWatcher: startWatcher,
