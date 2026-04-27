@@ -41,6 +41,9 @@
             vals.push(current.trim());
             const obj = {};
             headers.forEach((h, idx) => { obj[h] = vals[idx] || ''; });
+            if (obj.phone && /^\d{9,10}$/.test(obj.phone) && !obj.phone.startsWith('0')) {
+                obj.phone = '0' + obj.phone;
+            }
             if (obj.email && obj.name) users.push(obj);
         }
         return users;
@@ -129,12 +132,13 @@
     loadUsers();
 
     let slots = [
-        ["9:00 "," 9:05"],["9:05 "," 9:10"],["9:10 "," 9:15"],["9:15 "," 9:20"],
-        ["9:20 "," 9:25"],["9:25 "," 9:30"],["9:30 "," 9:35"],["9:35 "," 9:40"],
-        ["9:40 "," 9:45"],["9:45 "," 9:50"],["9:50 "," 9:55"],["9:55 "," 10:00"],
-        ["10:00 "," 10:05"],["10:05 "," 10:10"],["10:10 "," 10:15"],["10:15 "," 10:20"],
-        ["10:20 "," 10:25"],["10:25 "," 10:30"],["10:30 "," 10:35"],["10:35 "," 10:40"],
-        ["10:40 "," 10:45"],["10:45 "," 10:50"]
+        ["11:00 "," 11:05"],["10:55 "," 11:00"],["10:50 "," 10:55"],
+        ["10:45 "," 10:50"],["10:40 "," 10:45"],["10:35 "," 10:40"],["10:30 "," 10:35"],
+        ["10:25 "," 10:30"],["10:20 "," 10:25"],["10:15 "," 10:20"],["10:10 "," 10:15"],
+        ["10:05 "," 10:10"],["10:00 "," 10:05"],["9:55 "," 10:00"],["9:50 "," 9:55"],
+        ["9:45 "," 9:50"],["9:40 "," 9:45"],["9:35 "," 9:40"],["9:30 "," 9:35"],
+        ["9:25 "," 9:30"],["9:20 "," 9:25"],["9:15 "," 9:20"],["9:10 "," 9:15"],
+        ["9:05 "," 9:10"],["9:00 "," 9:05"]
     ];
 
     /* ================= BOOKING WATCHER (auto-check every 1 min) ================= */
@@ -677,6 +681,156 @@
         }
     }
 
+    /* ================= TEST DRY-RUN (no network calls) ================= */
+    let testPopupCount = 0;
+
+    function showTestPopup(email, steps) {
+        testPopupCount++;
+        const offset = 20 * (testPopupCount % 6);
+
+        const popup = document.createElement('div');
+        popup.style.cssText = `position:fixed;top:${50+offset}px;left:${80+offset}px;width:520px;max-height:85vh;background:#fff;border:2px solid #f59e0b;border-radius:8px;font-family:system-ui,sans-serif;font-size:12px;z-index:1000001;box-shadow:0 4px 24px rgba(0,0,0,0.3);display:flex;flex-direction:column;`;
+
+        let sectionsHtml = steps.map((step, i) => `
+            <div style="border-bottom:1px solid #e5e7eb;">
+                <div class="test-section-hdr" data-test-idx="${i}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:${step.skipped ? '#fef3c7' : '#f0fdf4'};cursor:pointer;user-select:none;">
+                    <span><b>${i+1}. ${step.name}</b> ${step.skipped ? '<span style="color:#d97706;">(Skipped)</span>' : ''}</span>
+                    <span style="font-size:10px;color:#888;">\u25BC</span>
+                </div>
+                <div class="test-section-body" style="display:none;padding:10px 12px;">
+                    <div style="margin-bottom:6px;"><b style="color:#666;">Method:</b> ${step.method}</div>
+                    <div style="margin-bottom:6px;"><b style="color:#666;">URL:</b> <span style="word-break:break-all;color:#0969da;">${step.url}</span></div>
+                    <div style="margin-bottom:4px;"><b style="color:#666;">Payload:</b></div>
+                    <pre style="background:#1e1e1e;color:#d4d4d4;padding:8px;border-radius:4px;font-size:10px;white-space:pre-wrap;word-break:break-all;max-height:150px;overflow-y:auto;margin:0 0 6px 0;">${escapeHtml(JSON.stringify(step.payload, null, 2))}</pre>
+                    ${step.note ? `<div style="margin-top:4px;padding:6px 8px;background:#fef9c3;border-radius:4px;font-size:10px;color:#92400e;"><b>Note:</b> ${step.note}</div>` : ''}
+                </div>
+            </div>
+        `).join('');
+
+        popup.innerHTML = `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#f59e0b;color:#fff;border-radius:6px 6px 0 0;cursor:move;user-select:none;">
+                <span style="font-weight:bold;font-size:12px;">\uD83E\uDDEA TEST: ${email}</span>
+                <div style="display:flex;gap:4px;">
+                    <button class="test-min-btn" style="background:rgba(255,255,255,0.3);border:none;color:#fff;width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;">\u2014</button>
+                    <button class="test-close-btn" style="background:rgba(255,255,255,0.3);border:none;color:#fff;width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:14px;">\u2716</button>
+                </div>
+            </div>
+            <div class="test-popup-body" style="overflow-y:auto;flex:1;max-height:70vh;">
+                ${sectionsHtml}
+            </div>
+        `;
+
+        document.body.appendChild(popup);
+
+        popup.querySelectorAll('.test-section-hdr').forEach(hdr => {
+            hdr.addEventListener('click', () => {
+                const body = hdr.nextElementSibling;
+                const open = body.style.display !== 'none';
+                body.style.display = open ? 'none' : 'block';
+                hdr.querySelector('span:last-child').textContent = open ? '\u25BC' : '\u25B2';
+            });
+        });
+
+        popup.querySelector('.test-close-btn').addEventListener('click', () => popup.remove());
+        popup.querySelector('.test-min-btn').addEventListener('click', () => {
+            const body = popup.querySelector('.test-popup-body');
+            const hidden = body.style.display === 'none';
+            body.style.display = hidden ? '' : 'none';
+            popup.querySelector('.test-min-btn').textContent = hidden ? '\u2014' : '\u25A1';
+        });
+
+        const header = popup.querySelector('div:first-child');
+        let isDrag = false, dx, dy, sl, st;
+        header.addEventListener('mousedown', e => {
+            if (e.target.tagName === 'BUTTON') return;
+            isDrag = true; dx = e.clientX; dy = e.clientY;
+            const r = popup.getBoundingClientRect(); sl = r.left; st = r.top;
+            e.preventDefault();
+        });
+        document.addEventListener('mousemove', e => {
+            if (!isDrag) return;
+            popup.style.left = (sl + e.clientX - dx) + 'px';
+            popup.style.top = (st + e.clientY - dy) + 'px';
+        });
+        document.addEventListener('mouseup', () => { isDrag = false; });
+    }
+
+    function testRunOne(index, slotIdx) {
+        const user = preload[index];
+        if (!user) { console.log('Invalid index'); return; }
+
+        const currentDate = getCurrentDate();
+        if (slotIdx === undefined) slotIdx = getNextAvailableSlot(0);
+        if (slotIdx < 0 || slotIdx >= slots.length) slotIdx = 0;
+
+        const slot = slots[slotIdx];
+        const startTime = currentDate + ' ' + slot[0].trim();
+        const finishTime = currentDate + ' ' + slot[1].trim();
+
+        const steps = [];
+
+        steps.push({
+            name: 'LOGIN',
+            method: 'POST',
+            url: loginUrl,
+            payload: { name: user.email, password: user.pass }
+        });
+
+        steps.push({
+            name: 'BOOK APPOINTMENT',
+            method: 'POST',
+            url: appointmentUrl,
+            payload: {
+                'reservation[start_time]': startTime,
+                'reservation[finish_time]': finishTime,
+                'reservation[full_name]': user.name,
+                'reservation[phone]': user.phone,
+                'reservation[mobile]': user.phone,
+                'reservation[resource_id]': resource_id,
+                'reservation[xpos]': '',
+                'reservation[ypos]': ''
+            }
+        });
+
+        const hasPassportData = user.region && user.am && user.apofasi;
+        const [datePart, timePart] = startTime.split(' ');
+        const [hour, min] = timePart.split(':');
+        const formUrl = getPassportFormUrl(datePart, hour, min);
+
+        steps.push({
+            name: 'PASSPORT FORM',
+            method: 'POST',
+            url: formUrl,
+            skipped: !hasPassportData,
+            note: !hasPassportData ? 'No passport data (region/am/apofasi missing)' : null,
+            payload: hasPassportData ? {
+                'form[3]': user.region || '',
+                'form[4]': user.am || '',
+                'form[6]': user.year || '2025',
+                'form[7]': user.apofasi || '',
+                'form[5]': (user.greek || '').toUpperCase(),
+                'form[1]': (user.pno || '').toUpperCase(),
+                'form[19][]': 'I DECLARE THAT ALL ABOVE INFORMATION IS ACCURATE.',
+                'reservation[start_time]': startTime,
+                'reservation[finish_time]': finishTime,
+                'reservation[full_name]': user.name,
+                'reservation[phone]': user.phone,
+                'reservation[mobile]': user.phone,
+                'reservation[resource_id]': resource_id
+            } : { reason: 'Missing region/am/apofasi' }
+        });
+
+        steps.push({
+            name: 'LOGOUT',
+            method: 'GET',
+            url: logoutUrl,
+            payload: { method: 'GET' }
+        });
+
+        showTestPopup(user.email, steps);
+        console.log(`🧪 TEST: Showing ${steps.length} steps for ${user.email} (slot ${slotIdx}: ${slot[0].trim()} - ${slot[1].trim()})`);
+    }
+
     /* ================= UTILITY ================= */
     function getCurrentDate() {
         const today = new Date();
@@ -1151,6 +1305,38 @@
             #${UI_ID} .btn-book:hover:not(:disabled) {
                 background: #555;
             }
+            #${UI_ID} .btn-fill {
+                background: #0969da;
+                color: #fff;
+            }
+            #${UI_ID} .btn-fill:hover:not(:disabled) {
+                background: #0757b5;
+            }
+            #${UI_ID} .cp-row {
+                display: flex;
+                align-items: center;
+                gap: 4px;
+                margin-bottom: 1px;
+            }
+            #${UI_ID} .cp-row .cp-val {
+                flex: 1;
+                min-width: 0;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            #${UI_ID} .cp-btn {
+                background: #e2e8f0;
+                border: none;
+                color: #475569;
+                font-size: 9px;
+                padding: 1px 5px;
+                border-radius: 3px;
+                cursor: pointer;
+                flex-shrink: 0;
+                line-height: 1.4;
+            }
+            #${UI_ID} .cp-btn:hover { background: #cbd5e1; }
+            #${UI_ID} .cp-btn.copied { background: #16a34a; color: #fff; }
             #${UI_ID} .btn-all {
                 display: block;
                 width: 100%;
@@ -1464,6 +1650,124 @@
         URL.revokeObjectURL(url);
     }
 
+    function autoFillLogin(user) {
+        const selectors = {
+            email: ['input[name="name"]', 'input[name="email"]', 'input[name="username"]', 'input[type="email"]', 'input[id*="email"]', 'input[id*="user"]', 'input[id*="login"]', 'input[placeholder*="email" i]', 'input[placeholder*="user" i]'],
+            password: ['input[name="password"]', 'input[type="password"]', 'input[id*="pass"]', 'input[placeholder*="pass" i]']
+        };
+
+        let filled = [];
+
+        function findAndFill(fieldSelectors, value, label) {
+            for (const sel of fieldSelectors) {
+                const el = document.querySelector(sel);
+                if (el && el.offsetParent !== null) {
+                    const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+                    nativeSetter.call(el, value);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    el.dispatchEvent(new Event('change', { bubbles: true }));
+                    filled.push(label);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        findAndFill(selectors.email, user.email, 'Email');
+        findAndFill(selectors.password, user.pass, 'Password');
+
+        if (filled.length > 0) {
+            console.log(`✅ Auto-filled: ${filled.join(', ')} for ${user.email}`);
+        } else {
+            console.log(`❌ No login fields found on this page for ${user.email}`);
+        }
+        return filled;
+    }
+
+    function autoFillBookingForm(user) {
+        let filled = [];
+        const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+
+        function setVal(el, value, label) {
+            nativeSetter.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            filled.push(label);
+        }
+
+        const fields = {
+            'reservation[full_name]': { value: user.name, label: 'Name' },
+            'reservation[phone]': { value: user.phone, label: 'Phone' },
+            'reservation[mobile]': { value: user.phone, label: 'Mobile' }
+        };
+
+        for (const [name, info] of Object.entries(fields)) {
+            const el = document.querySelector(`input[name="${name}"]`);
+            if (el) setVal(el, info.value, info.label);
+        }
+
+        if (filled.length > 0) {
+            console.log(`✅ Form filled: ${filled.join(', ')} for ${user.name}`);
+        } else {
+            console.log(`❌ No booking form fields found on this page for ${user.name}`);
+        }
+        return filled;
+    }
+
+    function autoFillPassportForm(user) {
+        let filled = [];
+        const nativeSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+
+        function setInput(el, value, label) {
+            nativeSetter.call(el, value);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+            filled.push(label);
+        }
+
+        function setSelect(el, value, label) {
+            const options = Array.from(el.options);
+            const match = options.find(o => o.value === value || o.text.trim() === value);
+            if (match) {
+                el.value = match.value;
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+                filled.push(label);
+            }
+        }
+
+        const regionEl = document.querySelector('select[name="form[3]"]');
+        if (regionEl && user.region) setSelect(regionEl, user.region, 'Region');
+
+        const amEl = document.querySelector('input[name="form[4]"]');
+        if (amEl && user.am) setInput(amEl, user.am, 'AM');
+
+        const yearEl = document.querySelector('select[name="form[6]"]');
+        if (yearEl && user.year) setSelect(yearEl, user.year, 'Year');
+
+        const apofasiEl = document.querySelector('input[name="form[7]"]');
+        if (apofasiEl && user.apofasi) setInput(apofasiEl, user.apofasi, 'Apofasi');
+
+        const greekEl = document.querySelector('input[name="form[5]"]');
+        if (greekEl && user.greek) setInput(greekEl, (user.greek || '').toUpperCase(), 'Greek Employer');
+
+        const passportEl = document.querySelector('input[name="form[1]"]');
+        if (passportEl && user.pno) setInput(passportEl, (user.pno || '').toUpperCase(), 'Passport');
+
+        const declareEl = document.querySelector('input[name="form[19][]"]');
+        if (declareEl && !declareEl.checked) {
+            declareEl.checked = true;
+            declareEl.dispatchEvent(new Event('change', { bubbles: true }));
+            filled.push('Declaration');
+        }
+
+        if (filled.length > 0) {
+            console.log(`✅ Passport form filled: ${filled.join(', ')} for ${user.name}`);
+        } else {
+            console.log(`❌ No passport form fields found on this page for ${user.name}`);
+        }
+        return filled;
+    }
+
     function rebuildPanel() {
         const existing = document.getElementById(UI_ID);
         if (existing) existing.remove();
@@ -1478,44 +1782,59 @@
         panel.id = UI_ID;
         
         const noUsersMsg = preload.length === 0 ? '<div style="text-align:center;padding:20px;color:#94a3b8;font-size:12px;"><div style="font-size:28px;margin-bottom:8px;">📄</div><b>No users loaded</b><br>Upload a CSV file to load user data</div>' : '';
+        function cpField(label, value) {
+            if (!value || value === '-') return `<div class="cp-row"><span class="cp-val"><b>${label}:</b> -</span></div>`;
+            return `<div class="cp-row"><span class="cp-val"><b>${label}:</b> ${value}</span><button class="cp-btn" data-cp="${value.replace(/"/g, '&quot;')}">Copy</button></div>`;
+        }
+
         let userCards = preload.map((user, idx) => `
             <div class="user-card" id="user-card-${idx}">
-                <div class="user-name">${idx + 1}. ${user.name}</div>
+                <div class="user-name">${idx + 1}. ${user.name} <button class="cp-btn" data-cp="${user.name}" style="margin-left:4px;">Copy</button></div>
                 
                 <div class="user-section">
                     <div class="user-section-title">Account</div>
                     <div class="user-info">
-                        <b>Email:</b> ${user.email} | <b>Pass:</b> ${user.pass}<br>
-                        <b>Phone:</b> ${user.phone}
+                        ${cpField('Email', user.email)}
+                        ${cpField('Pass', user.pass)}
+                        ${cpField('Phone', user.phone)}
                     </div>
                 </div>
                 
                 <div class="user-section">
                     <div class="user-section-title">Personal</div>
                     <div class="user-info">
-                        <b>F/Name:</b> ${user.fname || '-'}<br>
-                        <b>City:</b> ${user.city || '-'}
+                        ${cpField('F/Name', user.fname)}
+                        ${cpField('City', user.city)}
                     </div>
                 </div>
                 
                 <div class="user-section">
                     <div class="user-section-title">Passport</div>
                     <div class="user-info">
-                        <b>P.No:</b> ${user.pno} | <b>Expiry:</b> ${user.expiry || '-'}
+                        ${cpField('P.No', user.pno)}
+                        ${cpField('Expiry', user.expiry)}
                     </div>
                 </div>
                 
                 <div class="user-section">
                     <div class="user-section-title">Apofasi / Greek</div>
                     <div class="user-info">
-                        <b>Region:</b> ${user.region || '-'} | <b>Year:</b> ${user.year || '-'}<br>
-                        <b>AM:</b> ${user.am || '-'} | <b>Apofasi:</b> ${user.apofasi || '-'}<br>
-                        <b>Greek Employer:</b> ${user.greek || '-'}
+                        ${cpField('Region', user.region)}
+                        ${cpField('Year', user.year)}
+                        ${cpField('AM', user.am)}
+                        ${cpField('Apofasi', user.apofasi)}
+                        ${cpField('Greek Employer', user.greek)}
                     </div>
                 </div>
                 
                 <div class="user-buttons">
                     <button class="btn btn-book" data-idx="${idx}">Book Appointment</button>
+                    <button class="btn btn-fill" data-test-idx="${idx}" style="background:#f59e0b;color:#fff;">Test Book</button>
+                    <button class="btn btn-fill" data-fill-idx="${idx}">Auto Fill Login</button>
+                </div>
+                <div class="user-buttons" style="margin-top:4px;">
+                    <button class="btn btn-fill" data-fill2-idx="${idx}" style="background:#16a34a;">Fill Form 2</button>
+                    <button class="btn btn-fill" data-fill3-idx="${idx}" style="background:#7c3aed;">Fill Last Form</button>
                 </div>
                 <div class="status-text" id="status-${idx}"></div>
             </div>
@@ -1637,6 +1956,60 @@
 
         // Individual book buttons - auto pick next available slot
         panel.querySelector('#userList').addEventListener('click', async (e) => {
+            if (e.target.dataset.cp !== undefined) {
+                const val = e.target.dataset.cp;
+                navigator.clipboard.writeText(val).then(() => {
+                    e.target.classList.add('copied');
+                    const orig = e.target.textContent;
+                    e.target.textContent = 'Copied!';
+                    setTimeout(() => { e.target.textContent = orig; e.target.classList.remove('copied'); }, 1000);
+                });
+                return;
+            }
+            if (e.target.dataset.testIdx !== undefined) {
+                const idx = parseInt(e.target.dataset.testIdx);
+                testRunOne(idx);
+                return;
+            }
+            if (e.target.dataset.fillIdx !== undefined) {
+                const idx = parseInt(e.target.dataset.fillIdx);
+                const user = preload[idx];
+                const statusEl = document.getElementById(`status-${idx}`);
+                if (!user) return;
+                const filled = autoFillLogin(user);
+                if (statusEl) {
+                    statusEl.textContent = filled.length > 0
+                        ? `✅ Filled: ${filled.join(', ')}`
+                        : '❌ No login fields found on this page';
+                }
+                return;
+            }
+            if (e.target.dataset.fill2Idx !== undefined) {
+                const idx = parseInt(e.target.dataset.fill2Idx);
+                const user = preload[idx];
+                const statusEl = document.getElementById(`status-${idx}`);
+                if (!user) return;
+                const filled = autoFillBookingForm(user);
+                if (statusEl) {
+                    statusEl.textContent = filled.length > 0
+                        ? `✅ Form 2 filled: ${filled.join(', ')}`
+                        : '❌ No booking form fields found';
+                }
+                return;
+            }
+            if (e.target.dataset.fill3Idx !== undefined) {
+                const idx = parseInt(e.target.dataset.fill3Idx);
+                const user = preload[idx];
+                const statusEl = document.getElementById(`status-${idx}`);
+                if (!user) return;
+                const filled = autoFillPassportForm(user);
+                if (statusEl) {
+                    statusEl.textContent = filled.length > 0
+                        ? `✅ Last form filled: ${filled.join(', ')}`
+                        : '❌ No passport form fields found';
+                }
+                return;
+            }
             if (e.target.dataset.idx !== undefined) {
                 const idx = parseInt(e.target.dataset.idx);
                 const btn = e.target;
@@ -1709,6 +2082,10 @@
         runAll: (startSlot, delay) => runAll(startSlot || 0, delay || 3000),
         runOne: (index, start, end) => runOne(index, start, end, 0),
         login: (index = 0) => doLogin(preload[index]),
+        test: (index = 0, slotIdx) => testRunOne(index, slotIdx),
+        fill: (index = 0) => autoFillLogin(preload[index]),
+        fillForm: (index = 0) => autoFillBookingForm(preload[index]),
+        fillPassport: (index = 0) => autoFillPassportForm(preload[index]),
         book: (index, start, end) => bookAppointment(preload[index], start, end),
         passport: (index, start, end) => submitPassportForm(preload[index], start, end),
         logout: doLogout,
