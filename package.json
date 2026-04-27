@@ -1,0 +1,19 @@
+{
+  "name": "gujjar-auto-filler",
+  "version": "1.0.0",
+  "main": "login-fetch.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "puppeteer": "^24.42.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-real-browser": "^1.4.4",
+    "undici": "^7.25.0"
+  }
+}
